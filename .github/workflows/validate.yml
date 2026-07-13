@@ -1,0 +1,29 @@
+# Validates that the config is accepted by golangci-lint's JSON schema
+# (`golangci-lint config verify`). This catches typos, renamed settings, and
+# breakage introduced by new golangci-lint releases.
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-config:
+    name: golangci-lint config verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pin the golangci-lint version so CI results are reproducible.
+      # Bump this deliberately when a new release comes out.
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+            | sh -s -- -b ./bin v2.12.2
+
+      - name: Verify config
+        run: ./bin/golangci-lint config verify --config .golangci.yml
