@@ -157,6 +157,8 @@ linters:
         - name: comment-spacings
         - name: datarace
         - name: early-return
+        - name: package-comments
+          disabled: true # package comments not required
         - name: redundant-import-alias
         - name: superfluous-else
         - name: use-errors-new
@@ -167,7 +169,8 @@ linters:
 
     staticcheck:
       checks:
-        - all # defaults skip ST1000/ST1003/ST1016/ST1020-ST1022 doc and naming conventions
+        - all # defaults skip the ST doc and naming conventions
+        - -ST1000 # package comments not required
 
     testifylint:
       enable-all: true
