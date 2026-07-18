@@ -2,10 +2,11 @@
 # An opinionated golangci-lint config for idiomatic Go.
 #
 # Every linter is enabled explicitly (`default: none`) and annotated — nothing
-# runs that isn't listed below. A linter earns its place by catching real bugs
-# or enforcing documented Go idiom (Effective Go, Go Code Review Comments,
-# godoc conventions). Style opinions with no idiom behind them are deliberately
-# left out, no matter how popular.
+# runs that isn't listed below. The bar for inclusion: catch real bugs, or
+# enforce documented Go idiom (Effective Go, Go Code Review Comments, godoc
+# conventions). On top of that sit a few deliberate strictness opinions —
+# no package-level state, no init functions, wrapped external errors — chosen
+# so that generated and hand-written code are held to the same bar.
 #
 # Usage: copy this file to your repo root as `.golangci.yml`, then:
 #   golangci-lint run        # lint
@@ -39,13 +40,14 @@ linters:
     - fatcontext # nested contexts in loops
     - forcetypeassert # unguarded type assertions
     - gocheckcompilerdirectives # malformed //go: directives
-    - gochecksumtype # sum-type switch exhaustiveness
+    - gochecksumtype # missing sum-type switch cases
     - makezero # append to non-zero-length make
     - musttag # missing struct tags in (un)marshal
     - nilerr # nil return after err != nil check
     - nilnesserr # wrong nil err returned
     - nilnil # nil error with invalid value
     - nosprintfhostport # Sprintf host:port breaks IPv6
+    - protogetter # proto fields read without getters
     - reassign # reassigned package variables
     - rowserrcheck # unchecked rows.Err
     - spancheck # unended OTel spans
@@ -53,7 +55,7 @@ linters:
     - wastedassign # wasted assignments
 
     # idiom & convention
-    - canonicalheader # canonical net/http.Header keys
+    - canonicalheader # non-canonical net/http.Header keys
     - containedctx # context.Context struct fields
     - copyloopvar # obsolete loop-var copies (Go 1.22+)
     - errname # ErrFoo / FooError naming
@@ -64,7 +66,7 @@ linters:
     - gocognit # cognitive complexity
     - goconst # repeated strings that could be consts
     - gocritic # bug/perf/style diagnostics
-    - goprintffuncname # printf-like funcs end in f
+    - goprintffuncname # printf-like funcs not ending in f
     - iface # interface pollution
     - inamedparam # unnamed interface method params
     - interfacebloat # oversized interfaces
@@ -75,6 +77,7 @@ linters:
     - noctx # missing context.Context usage
     - perfsprint # faster fmt.Sprintf alternatives
     - predeclared # shadowed predeclared identifiers
+    - promlinter # Prometheus metric naming
     - recvcheck # mixed receiver types
     - revive # golint successor
     - unconvert # unnecessary type conversions
@@ -88,6 +91,7 @@ linters:
     - zerologlint # zerolog without Msg/Send
 
     # tests
+    - ginkgolinter # ginkgo/gomega assertion misuse
     - testableexamples # examples without expected output
     - testifylint # testify assertion usage
     - thelper # test helpers without t.Helper
@@ -98,6 +102,7 @@ linters:
     - asciicheck # non-ASCII identifiers
     - bidichk # dangerous unicode sequences
     - dupword # duplicate words in comments
+    - godoclint # godoc conventions
     - godot # comments end in a period
     - gomoddirectives # replace/retract/exclude in go.mod
     - iotamixing # iota mixed with explicit consts
@@ -109,14 +114,14 @@ linters:
     - gosec # security issues
 
   settings:
+    dupword:
+      comments-only: true
+
     exhaustive:
-      default-signifies-exhaustive: true
+      default-signifies-exhaustive: true # a default case covers the remaining values
 
     gocognit:
       min-complexity: 20
-
-    goconst:
-      min-occurrences: 3
 
     gocritic:
       enabled-tags:
@@ -129,6 +134,10 @@ linters:
         - unnamedResult # named returns are fine; nakedret polices the hazard
         - whyNoLint # duplicates nolintlint require-explanation
 
+    godoclint:
+      disable:
+        - start-with-name # duplicates staticcheck ST1020-ST1022
+
     gosec:
       excludes:
         - G104 # duplicates errcheck
@@ -140,9 +149,12 @@ linters:
         - shadow # too noisy; predeclared covers the dangerous cases
 
     iface:
-      enable:
+      enable: # omits opaque, which flags any interface-returning func
         - identical
         - unused
+
+    loggercheck:
+      no-printf-like: true # printf verbs don't format in structured logging
 
     misspell:
       locale: US
@@ -150,6 +162,10 @@ linters:
     nolintlint:
       require-explanation: true
       require-specific: true
+
+    reassign:
+      patterns: # any cross-package var reassignment, not just EOF/Err*
+        - ".*"
 
     revive:
       enable-default-rules: true
@@ -164,8 +180,14 @@ linters:
         - name: use-errors-new
 
     rowserrcheck:
-      packages:
+      packages: # database/sql is always checked; extend to wrappers
         - github.com/jmoiron/sqlx
+
+    spancheck:
+      checks:
+        - end
+        - record-error
+        - set-status
 
     staticcheck:
       checks:
@@ -176,8 +198,9 @@ linters:
       enable-all: true
 
     usetesting:
-      context-background: true
-      context-todo: true
+      context-background: true # flag context.Background too (off by default)
+      context-todo: true # flag context.TODO too (off by default)
+      os-temp-dir: true # flag os.TempDir too (off by default)
 
   exclusions:
     rules:
@@ -197,7 +220,7 @@ formatters:
 
   settings:
     gci:
-      custom-order: true
+      custom-order: true # apply the sections order below
       sections:
         - standard
         - default
