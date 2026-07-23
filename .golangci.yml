@@ -34,10 +34,11 @@ linters:
     # bug catchers
     - asasalint # []any passed as any to variadic
     - bodyclose # unclosed HTTP response bodies
+    - clickhouselint # ClickHouse driver API misuse
     - durationcheck # multiplied durations
     - errchkjson # unsupported types in json encoding
     - exhaustive # missing enum switch cases
-    - fatcontext # nested contexts in loops
+    - fatcontext # nested contexts in loops and func literals
     - forcetypeassert # unguarded type assertions
     - gocheckcompilerdirectives # malformed //go: directives
     - gochecksumtype # missing sum-type switch cases
@@ -46,7 +47,6 @@ linters:
     - nilerr # nil return after err != nil check
     - nilnesserr # wrong nil err returned
     - nilnil # nil error with invalid value
-    - nosprintfhostport # Sprintf host:port breaks IPv6
     - protogetter # proto fields read without getters
     - reassign # reassigned package variables
     - rowserrcheck # unchecked rows.Err
@@ -74,7 +74,7 @@ linters:
     - mirror # needless bytes/string conversions
     - modernize # modern language and library features
     - nakedret # naked returns in long funcs
-    - noctx # missing context.Context usage
+    - noctx # HTTP/SQL calls without context.Context
     - perfsprint # faster fmt.Sprintf alternatives
     - predeclared # shadowed predeclared identifiers
     - promlinter # Prometheus metric naming
@@ -114,14 +114,30 @@ linters:
     - gosec # security issues
 
   settings:
+    copyloopvar:
+      check-alias: true # vv := v copies are as obsolete as v := v
+
     dupword:
       comments-only: true
 
+    errcheck:
+      check-blank: true # _ = f() discards an error as silently as ignoring it
+
     exhaustive:
+      check: # enum-keyed map literals get the same treatment as switches
+        - switch
+        - map
       default-signifies-exhaustive: true # a default case covers the remaining values
+
+    ginkgolinter:
+      forbid-focus-container: true # focused specs silently skip the rest of the suite
 
     gocognit:
       min-complexity: 20
+
+    goconst:
+      eval-const-expressions: true # fold "a" + "b" before matching
+      find-duplicates: true # also flag duplicates of existing consts
 
     gocritic:
       enabled-tags:
@@ -129,9 +145,19 @@ linters:
         - style
         - performance
       disabled-checks:
+        - builtinShadow # duplicates predeclared
+        - commentFormatting # duplicates revive comment-spacings
+        - externalErrorReassign # duplicates reassign
         - hugeParam # flags ordinary value passing
+        - importShadow # same noise profile as govet shadow, disabled below
+        - nestingReduce # gocognit owns complexity
+        - paramTypeCombine # combining param types is taste, not idiom
+        - ptrToRefParam # pointer-vs-value API design is not idiom
         - rangeValCopy # flags ordinary value passing
+        - todoCommentWithoutDetail # TODO policing is workflow, not idiom
+        - tooManyResultsChecker # arbitrary numeric limit
         - unnamedResult # named returns are fine; nakedret polices the hazard
+        - unnecessaryBlock # explicit blocks can aid readability
         - whyNoLint # duplicates nolintlint require-explanation
 
     godoclint:
@@ -155,9 +181,16 @@ linters:
 
     loggercheck:
       no-printf-like: true # printf verbs don't format in structured logging
+      require-string-key: true # log keys must be constant strings
 
     misspell:
       locale: US
+
+    modernize:
+      disable:
+        - forvar # duplicates copyloopvar
+        - rangeint # duplicates intrange
+        - testingcontext # duplicates usetesting
 
     nolintlint:
       require-explanation: true
@@ -169,19 +202,43 @@ linters:
 
     revive:
       enable-default-rules: true
+      directives:
+        - name: specify-disable-reason # revive:disable comments must say why
       rules:
         - name: comment-spacings
         - name: datarace
+        - name: deep-exit # os.Exit/log.Fatal outside main or init
+        - name: defer # deferred-call mistakes: recover placement, loop vars, returns
+        - name: dot-imports
+          disabled: true # duplicates staticcheck ST1001
         - name: early-return
+        - name: enforce-slice-style # var s []T over empty literals and make
+          arguments: [nil]
+        - name: error-strings
+          disabled: true # duplicates staticcheck ST1005
+        - name: forbidden-call-in-wg-go # wg.Add/Done inside wg.Go
+        - name: modifies-value-receiver # mutation of a value receiver is silently lost
         - name: package-comments
           disabled: true # package comments not required
+        - name: redefines-builtin-id
+          disabled: true # duplicates predeclared
         - name: redundant-import-alias
-        - name: superfluous-else
-        - name: use-errors-new
+        - name: redundant-test-main-exit # os.Exit(m.Run()) obsolete since Go 1.15
+        - name: unreachable-code
+          disabled: true # duplicates govet unreachable
+        - name: unused-parameter
+          disabled: true # duplicates unparam
+        - name: use-fmt-print # builtin print/println write to stderr unstably
+        - name: var-naming
+          disabled: true # duplicates staticcheck ST1003
 
     rowserrcheck:
       packages: # database/sql is always checked; extend to wrappers
         - github.com/jmoiron/sqlx
+
+    sloglint:
+      no-global: all # inject loggers; no package-level slog default
+      static-msg: true # constant messages; variability belongs in attrs
 
     spancheck:
       checks:
@@ -192,10 +249,19 @@ linters:
     staticcheck:
       checks:
         - all # defaults skip the ST doc and naming conventions
+        - -QF1001 # De Morgan rewrites are taste, not idiom
+        - -QF1008 # explicit embedded-field selectors can aid clarity
         - -ST1000 # package comments not required
 
     testifylint:
       enable-all: true
+
+    usestdlibvars: # defaults only cover http-method and http-status-code
+      crypto-hash: true
+      default-rpc-path: true
+      sql-isolation-level: true
+      time-layout: true
+      tls-signature-scheme: true
 
     usetesting:
       context-background: true # flag context.Background too (off by default)
@@ -220,8 +286,7 @@ formatters:
 
   settings:
     gci:
-      custom-order: true # apply the sections order below
-      sections:
+      sections: # stdlib, then third-party, then this module
         - standard
         - default
         - localmodule

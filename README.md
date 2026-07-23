@@ -43,7 +43,7 @@ What that means in practice:
 
 ## What's inside
 
-The [config](.golangci.yml) enables 71 linters, grouped and commented in the file:
+The [config](.golangci.yml) enables 75 linters, grouped and commented in the file:
 
 | Group | Examples |
 | --- | --- |
@@ -58,7 +58,8 @@ Settings worth knowing about (each commented inline):
 
 - **`govet` runs all analyzers** — including `nilness`, `unusedwrite`, and `waitgroup`, which the default set skips — except `fieldalignment` (memory layout over readable field order) and `shadow` (noisy).
 - **`staticcheck` runs all checks** — the default silently skips the `ST` checks for package comments, naming (`ID`, not `Id`), and godoc conventions.
-- **`gocritic`** runs the diagnostic, style, and performance tags with a few perf-paranoia checks disabled.
+- **`gocritic`** runs the diagnostic, style, and performance tags with perf-paranoia, taste-only, and duplicate checks disabled.
+- **`errcheck` also flags `_ = f()`** — silently discarding an error takes an explained `//nolint`, not a blank assignment.
 - **Formatters:** `gofumpt` (strict superset of gofmt, extra rules on), `gci` (deterministic imports: stdlib → third-party → your module), `golines` (wraps at 120), `goimports`, `swaggo`.
 
 ## Adopting on an existing codebase
